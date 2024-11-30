@@ -1,0 +1,65 @@
+---
+- hosts: 
+    - all-nodes
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Add the overlay and br_netfilter kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "overlay"
+        - "br_netfilter"
+
+    - name: Let iptables see bridged traffic
+      sysctl:
+        name: "{{ item }}"
+        value: "1"
+        state: present
+      loop:
+        - "net.bridge.bridge-nf-call-iptables"
+        - "net.ipv4.ip_forward"
+
+    - name: Ensure containerd is installed
+      package:
+        name: containerd.io
+        state: present
+
+    - name: Ensure containerd is started and enabled at boot.
+      service:
+        name: containerd
+        state: started
+        enabled: true
+    
+    - name: Ensure containerd config directory exists
+      file:
+        path: /etc/containerd
+        state: directory
+      register: containerd_dir
+
+    - name: Get defaults from containerd
+      command: containerd config default
+      changed_when: false
+      register: containerd_config_default
+      when: containerd_config_default_write
+
+    - name: Write defaults to config.toml
+      copy:
+        dest: /etc/containerd/config.toml
+        content: "{{ containerd_config_default.stdout }}"
+      when: containerd_config_default_write
+
+    - name: Configure the systemd cgroup driver for containerd
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '            SystemdCgroup = false'
+        line: '            SystemdCgroup = true'
+      when: containerd_config_default_write
+      notify: Restart containerd
+
+  handlers:
+  - name: Restart containerd
+    ansible.builtin.service:
+      name: containerd
+      state: restarted
