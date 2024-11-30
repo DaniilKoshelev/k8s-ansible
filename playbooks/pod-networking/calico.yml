@@ -1,0 +1,12 @@
+---
+- hosts: 
+    - masters
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Install Pod network
+      become: yes
+      shell: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml >> pod_network_setup.log
+      args:
+        chdir: /home/{{ ansible_user }}
+        creates: pod_network_setup.log

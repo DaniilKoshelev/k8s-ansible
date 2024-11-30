@@ -1,0 +1,30 @@
+---
+- hosts: 
+    - masters
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Copy kubeadm config
+      copy:
+        src: ../configs/kubeadm-config.yml
+        dest: /etc/kubernetes/kubeadm-config.yaml
+        force: true
+
+    - name: Initialize the cluster (this could take some time)
+      shell: kubeadm init --config /etc/kubernetes/kubeadm-config.yaml >> cluster_initialized.log
+      args:
+        chdir: /home/{{ ansible_user }}
+        creates: cluster_initialized.log
+
+    - name: Create .kube directory
+      file:
+          path: /home/{{ ansible_user }}/.kube
+          state: directory
+          mode: 0755
+  
+    - name: Copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/{{ ansible_user }}/.kube/config
+        remote_src: yes
+        owner: onlycustom

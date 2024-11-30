@@ -1,0 +1,45 @@
+---
+- hosts: 
+    - all-nodes
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Add kubernetes apt-key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: '0644'
+        force: true
+
+    - name: Add kubernetes' apt repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /"
+        state: present
+        update_cache: yes
+    
+    - name: Ensure kubernetes components are installed
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "kubelet=1.29.*"
+        - "kubeadm=1.29.*"
+        - "kubectl=1.29.*"
+      notify: Restart kubelet
+
+    - name: Hold kubernetes package versions
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - "kubelet"
+        - "kubeadm"
+        - "kubectl"
+
+  handlers:
+  - name: Restart kubelet
+    ansible.builtin.service:
+      name: kubelet
+      state: restarted
+      enabled: true
+      daemon_reload: yes

@@ -1,0 +1,11 @@
+---
+- hosts: 
+    - masters
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Remove taint from control-plane (allows to schedule pods)
+      become: yes
+      shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+  tags:
+    - single-node

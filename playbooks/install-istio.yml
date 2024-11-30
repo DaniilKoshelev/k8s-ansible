@@ -1,0 +1,52 @@
+---
+- name: Install Istio on Kubernetes
+  hosts:
+    - all-nodes
+  gather_facts: no
+  become: yes
+  vars:
+    istio_version: "1.19.0"
+    istio_namespace: "istio-system"
+  tasks:
+    - name: Download Istio CLI
+      shell: |
+        curl -L https://istio.io/downloadIstio | ISTIO_VERSION={{ istio_version }} sh -
+        mv istio-{{ istio_version }}/bin/istioctl /usr/local/bin/
+      args:
+        creates: /usr/local/bin/istioctl
+      register: istio_downloaded
+
+    - name: Verify istioctl installation
+      command: istioctl version
+      ignore_errors: no
+      when: istio_downloaded is changed
+
+    - name: Install Istio control plane
+      become: no
+      shell: |
+        istioctl install --set profile=default -y
+      args:
+        chdir: "istio-{{ istio_version }}/"
+
+    - name: Verify Istio control plane installation
+      become: no
+      shell: |
+        kubectl get pods -n {{ istio_namespace }}
+      register: istio_pods
+      retries: 5
+      delay: 10
+      until: istio_pods.stdout.find("Running") != -1
+
+    - name: Label the default namespace to enable automatic sidecar injection
+      become: no
+      shell: kubectl label namespace default istio-injection=enabled --overwrite
+      ignore_errors: yes
+
+    - name: Verify Istio services
+      become: no
+      shell: |
+        kubectl get svc -n {{ istio_namespace }}
+      register: istio_services
+      retries: 5
+      delay: 10
+      until: istio_services.stdout.find("istio-ingressgateway") != -1
